@@ -4,14 +4,14 @@ import pytest
 import undigest
 
 
-@pytest.mark.parametrize(
-    "original",
-    [
-        "1o",
-        "zz",
-        "lf0",
-    ],
-)
+EXAMPLE_STRINGS = [
+    "1o",
+    "zz",
+    "lf0",
+]
+
+
+@pytest.mark.parametrize("original", EXAMPLE_STRINGS)
 def test_sha256_break(original):
     # given
     original_length = len(original)
@@ -22,3 +22,18 @@ def test_sha256_break(original):
 
     # then
     assert p == original, "Wrong password"
+
+
+@pytest.mark.parametrize("original", EXAMPLE_STRINGS)
+@pytest.mark.parametrize("nprocs", [1, 2, 4])
+def test_sha256_parallel_break(original, nprocs, capfd):
+    # given
+    original_length = len(original)
+    digest = hashlib.sha256(original.encode("utf-8")).hexdigest()
+
+    # when
+    undigest.distributed_undigest(nprocs, digest, original_length)
+
+    # then
+    captured = capfd.readouterr()
+    assert original in captured.out, "Wrong password"
