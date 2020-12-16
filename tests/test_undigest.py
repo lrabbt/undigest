@@ -32,8 +32,7 @@ def test_sha256_parallel_break(original, nprocs, capfd):
     digest = hashlib.sha256(original.encode("utf-8")).hexdigest()
 
     # when
-    undigest.distributed_undigest(nprocs, digest, original_length)
+    response = undigest.distributed_undigest(nprocs, digest, original_length)
 
     # then
-    captured = capfd.readouterr()
-    assert original in captured.out, "Wrong password"
+    assert response == original, "Wrong password"

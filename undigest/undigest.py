@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import tempfile
 
 from sucuri import Source, Serializer, DFGraph, Scheduler, FilterTagged
 
@@ -55,29 +56,44 @@ def distributed_undigest(
     valid_characters: str = DEFAULT_CHARACTERS,
 ):
     """Undigest hexdigest using distributed processes."""
+
     feeder_data = []
     for c in valid_characters:
         feeder_data.append([c, 1, valid_characters, original_size, digest])
 
-    graph = DFGraph()
-    sched = Scheduler(graph, nprocs, mpi_enabled=False)
+    with tempfile.NamedTemporaryFile() as tmp_file:
+        serialize_undigest = generate_undigest_serializer(tmp_file.name)
 
-    feed_first_char = Source(feeder_data)
-    find_undigested = FilterTagged(_try_password_wrapper, 1)
-    undigested = Serializer(print_undigested, 1)
+        graph = DFGraph()
+        sched = Scheduler(graph, nprocs, mpi_enabled=False)
 
-    graph.add(feed_first_char)
-    graph.add(find_undigested)
-    graph.add(undigested)
+        feed_first_char = Source(feeder_data)
+        find_undigested = FilterTagged(_try_password_wrapper, 1)
+        undigested = Serializer(serialize_undigest, 1)
 
-    feed_first_char.add_edge(find_undigested, 0)
-    find_undigested.add_edge(undigested, 0)
+        graph.add(feed_first_char)
+        graph.add(find_undigested)
+        graph.add(undigested)
 
-    sched.start()
+        feed_first_char.add_edge(find_undigested, 0)
+        find_undigested.add_edge(undigested, 0)
+
+        sched.start()
+
+        found_undigested = tmp_file.read().strip().decode("utf-8")
+        logger.debug(found_undigested)
+        return found_undigested
 
 
-def print_undigested(args):
-    """Filters out all procs return values and lets only found undigested string."""
-    found = args[0]
-    if found:
-        print(found)
+def generate_undigest_serializer(filepath):
+    """Generates serializer with file for communication with main process."""
+
+    def serialize_undigest(args):
+        """Filters out all procs return values and lets only found undigested string."""
+        found = args[0]
+        if found:
+            print(f'Original string: "{found}"')
+            with open(filepath, "w") as f:
+                f.write(found)
+
+    return serialize_undigest
