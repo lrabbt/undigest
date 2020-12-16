@@ -3,6 +3,9 @@
 from .pydf import *
 import bisect
 import itertools
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TaggedValue:
@@ -91,7 +94,7 @@ class Feeder(Node):
         self.dsts = []
         self.inport = []
         self.affinity = None
-        print("Setting feeder affinity")
+        logger.info("Setting feeder affinity")
 
     def f(self):
         return self.value
@@ -121,7 +124,7 @@ class Serializer(Node):
             buffertag = argbuffer[0][0].tag
             while buffertag == next:
                 args = [arg.pop(0) for arg in argbuffer]
-                print("Sending oper with tag %d" % args[0].tag)
+                logger.info("Sending oper with tag %d" % args[0].tag)
                 opers = self.create_oper(
                     self.f([arg.value for arg in args]), workerid, operq
                 )

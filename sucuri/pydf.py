@@ -4,7 +4,10 @@
 from multiprocessing import Process, Queue, Value, Pipe
 import threading
 
+import logging
 import sys
+
+logger = logging.getLogger(__name__)
 
 
 class Worker(Process):
@@ -22,7 +25,7 @@ class Worker(Process):
     #        self.operq.put(opers)
 
     def run(self):
-        print("I am worker %s" % self.wid)
+        logger.info("I am worker %s" % self.wid)
         self.operq.put([Oper(self.wid, None, None, None)])  # Request a task to start
 
         while True:
@@ -157,7 +160,7 @@ class Scheduler:
         self.keep_working = True
 
         if rank == 0:
-            print(
+            logger.info(
                 "I am the master. There are %s mpi processes. (hostname = %s)"
                 % (self.mpi_size, MPI.Get_processor_name())
             )
@@ -183,14 +186,14 @@ class Scheduler:
                         mpi_terminate()
 
             def mpi_terminate():
-                print("MPI TERMINATING")
+                logger.info("MPI TERMINATING")
                 for i in range(0, self.mpi_size):
                     comm.send(None, dest=i, tag=Scheduler.TERMINATE_TAG)
 
             t_in = threading.Thread(target=mpi_input, args=(self.operq,))
             t_out = threading.Thread(target=mpi_output, args=(self.outqueue,))
         else:
-            print("I am a slave. (hostname = %s)" % MPI.Get_processor_name())
+            logger.info("I am a slave. (hostname = %s)" % MPI.Get_processor_name())
             # slave
             self.inqueue = Queue()
             for worker in self.workers:
@@ -203,7 +206,7 @@ class Scheduler:
                     task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
                     if status.Get_tag() == Scheduler.TERMINATE_TAG:
                         self.keep_working = False
-                        print("MPI received termination.")
+                        logger.info("MPI received termination.")
                         self.terminate_workers(self.workers)
                     else:
                         # print "MPI Sending task to worker in slave."
@@ -261,7 +264,7 @@ class Scheduler:
             return len(self.waiting) == self.n_workers
 
     def terminate_workers(self, workers):
-        print(
+        logger.info(
             "Terminating workers %s %d %d"
             % (self.all_idle(self.workers), self.operq.qsize(), len(self.tasks))
         )
@@ -275,18 +278,18 @@ class Scheduler:
     def start(self):
         operq = self.operq
 
-        print("Roots %s" % [r for r in self.graph.nodes if len(r.inport) == 0])
+        logger.info("Roots %s" % [r for r in self.graph.nodes if len(r.inport) == 0])
         for root in [r for r in self.graph.nodes if len(r.inport) == 0]:
             task = Task(root.f, root.id)
             self.tasks += [task]
 
         for worker in self.workers:
-            print("Starting %s" % worker.wid)
+            logger.info("Starting %s" % worker.wid)
             worker.start()
 
         if self.mpi_rank == 0 or self.mpi_rank is None:
             # it this is the leader process or if mpi is not being used
-            print("Main loop")
+            logger.info("Main loop")
             self.main_loop()
 
     def main_loop(self):
@@ -327,5 +330,5 @@ class Scheduler:
                     task.workerid = wid
                     self.outqueue.put(task)
 
-        print("Waiting %s" % self.waiting)
+        logger.info("Waiting %s" % self.waiting)
         self.terminate_workers(self.workers)
